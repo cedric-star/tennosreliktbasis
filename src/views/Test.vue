@@ -435,10 +435,10 @@ td {
   border-color: #ffd700;
 }
 
-.relic-type-badge.lith { border-left: 3px solid #ffd700; }
-.relic-type-badge.meso { border-left: 3px solid #ffaa00; }
-.relic-type-badge.neo { border-left: 3px solid #ff8800; }
-.relic-type-badge.axi { border-left: 3px solid #ff6600; }
+.relic-type-badge.lith { border-left: 3px solid #8b5413; }
+.relic-type-badge.meso { border-left: 3px solid #cbb001; }
+.relic-type-badge.neo { border-left: 3px solid #70706b; }
+.relic-type-badge.axi { border-left: 3px solid #ffdf00; }
 .relic-type-badge.requiem { border-left: 3px solid #ff4444; }
 
 .no-types {
