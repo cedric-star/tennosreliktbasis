@@ -1,0 +1,26 @@
+html {
+    background-color: rgb(26, 1, 1);
+
+}
+
+html, body, button, div, table, th, td, input {
+    font-family: "JetBrainsMono NF";
+    outline: none;
+    border: none;
+    color: antiquewhite;
+}
+button, input {
+    background-color: #2b005d;
+    border-radius: 3px;
+}
+button:hover, input:hover{
+    background-color: #3d003e;
+}
+
+table, th, td {
+    border: none;
+}
+
+table {
+    border: 1px solid antiquewhite;
+}
