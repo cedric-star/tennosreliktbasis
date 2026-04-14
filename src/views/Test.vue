@@ -5,31 +5,11 @@ import dropsF from '../data/drops.json'
 import nodesF from '../data/solnodes.json'
 import fissuresF from '../data/fissures.json'
 
-
 const voidFissures = ref([]);
 const nodes = ref({});
 const drops = ref({});
 const isLoading = ref(false);
-const toShow = ref([]);
-
-async function setMyVar(myVar, subURL) {
-  try {
-    const response = await fetch(subURL);
-    console.log(`${subURL}:`, response.status);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    myVar.value = data;
-    return data;
-  } catch (error) {
-    console.error(`Fehler beim Laden von ${subURL}:`, error);
-    myVar.value = null;
-    return null;
-  }
-}
+const fissureData = ref([]); // Für die Tabelle
 
 async function getFissures() {
   //return setMyVar(voidFissures, "https://api.warframestat.us/pc/fissures");
@@ -56,39 +36,76 @@ async function getRelicDropsForNode() {
     getMissionDrops()
   ]);
 
+  const fissureNodes = new Map(); // Map statt Set für mehr Infos
+  if (voidFissures.value && Array.isArray(voidFissures.value)) {
+    voidFissures.value.forEach(fissure => {
+      const nodeName = fissure.node.split(' (')[0];
+      const planetName = fissure.node.match(/\(([^)]+)\)/)?.[1] || "Unknown";
 
-  // Korrekte Iteration durch die Mission Rewards
+      fissureNodes.set(nodeName, {
+        node: fissure.node,
+        tier: fissure.tier,
+        planet: planetName,
+        missionType: fissure.missionType
+      });
+
+      console.log(`Fissure Node: ${fissure.node} -> ${nodeName} (${planetName})`);
+    });
+  }
+
+  // Das gewünschte JSON Array aufbauen
+  const resultData = [];
+
   if (drops.value && drops.value.missionRewards) {
     console.log("=== Mission Rewards durchgehen ===");
 
     for (const planet in drops.value.missionRewards) {
-      //console.log(`Planet: ${planet}`);
       const missions = drops.value.missionRewards[planet];
 
       for (const missionName in missions) {
-        const missionData = missions[missionName];
-        const rewards = missionData.rewards;
-        //console.log(` Mission: ${missionName}`);
+        // Prüfen ob diese Mission in den Fissures vorkommt
+        if (fissureNodes.has(missionName)) {
+          const fissureInfo = fissureNodes.get(missionName);
+          const missionData = missions[missionName];
+          const rewards = missionData.rewards;
 
-        // rewards ist ein Objekt mit den Rotationen A, B, C
-        for (const rotation in rewards) {
-          //console.log(`   Rotation: ${rotation}`);
+          // Array für alle Relics dieser Mission
+          const relicRewards = [];
 
-          // rewards[rotation] ist ein ARRAY von Reward-Objekten
-          const rewardArray = rewards[rotation];
+          // Durch alle Rotationen (A, B, C) gehen
+          for (const rotation in rewards) {
+            const rewardArray = rewards[rotation];
 
-          // Durch das Array der Rewards iterieren
-          for (let i = 0; i < rewardArray.length; i++) {
-            const reward = rewardArray[i];
-            //console.log(`     Reward ${i}: ${reward.itemName}`);
+            // Durch alle Rewards iterieren
+            for (let i = 0; i < rewardArray.length; i++) {
+              const reward = rewardArray[i];
 
-            // Nach Relics suchen
-            if (reward.itemName && reward.itemName.includes("Relic")) {
-              console.log(`Found Relic: [${planet} | ${missionName}]`);
-              console.log(`  Rotation: ${rotation}`);
-              console.log(`  Relic: ${reward.itemName}`);
+              // Nach Relics suchen
+              if (reward.itemName && reward.itemName.includes("Relic")) {
+                relicRewards.push({
+                  relic: reward.itemName,
+                  rotation: rotation,
+                  rarity: reward.rarity || "Unknown"
+                });
 
+                console.log(`Found Relic: [${planet} | ${missionName}]`);
+                console.log(`  Rotation: ${rotation}`);
+                console.log(`  Relic: ${reward.itemName}`);
+                console.log(`  Rarity: ${reward.rarity || "Unknown"}`);
+              }
             }
+          }
+
+          // Nur hinzufügen wenn Relics gefunden wurden
+          if (relicRewards.length > 0) {
+            resultData.push({
+              node: fissureInfo.node,
+              nodeName: missionName,
+              planet: fissureInfo.planet,
+              tier: fissureInfo.tier,
+              missionType: fissureInfo.missionType,
+              rewards: relicRewards
+            });
           }
         }
       }
@@ -97,8 +114,29 @@ async function getRelicDropsForNode() {
     console.warn("Keine Mission Rewards Daten gefunden");
   }
 
-  console.log("nodes:" + nodes.value);
-  console.log("drops:" + drops.value);
+  // Ausgabe des fertigen JSON
+  console.log("=== RESULT JSON ===");
+  console.log(JSON.stringify(resultData, null, 2));
+
+
+
+
+  // Für die Tabelle aufbereiten
+  fissureData.value = resultData.map(item => ({
+    node: item.node,
+    tier: item.tier,
+    relicNames: item.rewards.map(r => `${r.relic} (${r.rotation})`).join(', '),
+    relicsByRotation: {
+      A: item.rewards.filter(r => r.rotation === "A").map(r => r.relic.replace(' Relic', '')),
+      B: item.rewards.filter(r => r.rotation === "B").map(r => r.relic.replace(' Relic', '')),
+      C: item.rewards.filter(r => r.rotation === "C").map(r => r.relic.replace(' Relic', ''))
+    }
+  }));
+
+  // toShow mit den Node-Namen füllen (optional)
+  const toShow = resultData.map(item => item.nodeName);
+  console.log("Missionen mit Relics:", toShow);
+
   isLoading.value = false;
 }
 </script>
@@ -108,11 +146,17 @@ async function getRelicDropsForNode() {
     {{ isLoading ? 'Lade Daten...' : 'Berechne Relikte' }}
   </button>
 
+  <!-- Debug: Zeige das JSON -->
+  <details v-if="fissureData.length > 0" class="debug">
+    <summary>JSON Struktur anzeigen ({{ fissureData.length }} Missionen)</summary>
+    <pre>{{ JSON.stringify(fissureData, null, 2)}}</pre>
+  </details>
+
   <table>
     <thead>
     <tr>
       <th>Void Fissure Node</th>
-      <th>Relic to Open</th>
+      <th>Tier</th>
       <th>Relics dropping</th>
     </tr>
     </thead>
@@ -124,11 +168,45 @@ async function getRelicDropsForNode() {
     </tr>
     </tbody>
   </table>
-
 </template>
 
 <style scoped>
-template {
-  background: #452b03;
+.debug {
+  margin: 20px;
+  padding: 10px;
+  background: #1a0f01;
+  border: 1px solid #ffd700;
+  border-radius: 5px;
+}
+
+.debug pre {
+  color: #ffd700;
+  font-size: 12px;
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #ffd700;
+}
+
+th, td {
+  border: 1px solid #ffd700;
+  padding: 8px;
+  text-align: left;
+}
+
+button {
+  margin: 20px;
+  padding: 10px 20px;
+  background: #ffd700;
+  color: #452b03;
+  border: none;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
 }
 </style>
